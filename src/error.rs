@@ -13,4 +13,6 @@ pub enum ContractError {
     SenderNotMatched {},
     #[error("Sender is the the super admin")]
     NotSuperAdmin{},
+    #[error("From date should be smaller than To date")]
+    WrongDates{},
 }

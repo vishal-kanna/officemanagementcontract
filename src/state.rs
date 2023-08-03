@@ -29,8 +29,8 @@ pub struct UserDetails {
 
 pub struct LeaveReq {
     pub id: u64,
-    pub start_date: String,
-    pub end_date: String,
+    pub from: String,
+    pub to: String,
     pub status: String,
     pub reason: String,
 }

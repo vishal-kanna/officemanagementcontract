@@ -1,4 +1,8 @@
+// use std::intrinsics::type_name;
 use std::ops::Add;
+use chrono::{NaiveDate, NaiveDateTime};
+// use std::any::type_name;
+use std::any::type_name;
 
 use crate::error::ContractError;
 
@@ -8,7 +12,9 @@ use cosmwasm_std::{
     entry_point, to_binary, Binary, DepsMut, Empty, Env, MessageInfo, Order, Response, StdError,
 };
 use cosmwasm_std::{Deps, StdResult};
-
+// fn type_of(_: &T) -> &'static str {
+//     std::any::type_name::()
+// }
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn instantiate(
     deps: DepsMut,
@@ -56,10 +62,10 @@ pub fn execute(
         } => addemploye(dep, env, info, name, age, address, role),
         ExecuteMsg::Applyleave {
             id,
-            start_date,
-            end_date,
+            from,
+            to,
             reason,
-        } => apply_leave(dep, env, info, id, start_date, end_date, reason),
+        } => apply_leave(dep, env, info, id, from, to, reason),
         ExecuteMsg::AcceptLeave { leaveid }=>acceptleave(dep, info, leaveid),
     }
 }
@@ -104,8 +110,8 @@ pub fn apply_leave(
     _env: Env,
     info: MessageInfo,
     id: u64,
-    start_date: String,
-    end_date: String,
+    from: String,
+    to: String,
     reason: String,
 ) -> Result<Response, ContractError> {
     //check if the student present or not
@@ -119,15 +125,25 @@ pub fn apply_leave(
                     .update::<_, cosmwasm_std::StdError>(dep.storage, |leaveid: u128| {
                         Ok(leaveid.add(1))
                     })?;
-                leave = leaveid.clone();
-                let leavereq = LeaveReq {
-                    id: id.clone(),
-                    start_date: start_date.to_string(),
-                    end_date: end_date.to_string(),
-                    status: "Pending".to_string(),
-                    reason: reason.clone(),
-                };
-                LEAVE_LIST.save(dep.storage, leaveid, &leavereq)?;
+            let s_date = NaiveDate::parse_from_str(&from.clone(), "%d-%m-%Y").unwrap();
+                // println!("the naive date is {:?}",s_date);
+                let e_date = NaiveDate::parse_from_str(&to.clone(), "%d-%m-%Y").unwrap();
+                    // println!("the end date is {}",type_name::<typeof(my_variable)>());
+                if s_date<e_date{
+                    leave = leaveid.clone();
+                    let leavereq = LeaveReq {
+                        id: id.clone(),
+                        from: from.to_string(),
+                        to: to.to_string(),
+                        status: "Pending".to_string(),
+                        reason: reason.clone(),
+                    };
+                    LEAVE_LIST.save(dep.storage, leaveid, &leavereq)?;
+
+                }else{
+                    return Err(ContractError::WrongDates {})
+                }
+               
             } else {
                 return Err(ContractError::SenderNotMatched {});
             }
@@ -289,8 +305,8 @@ mod tests {
                 a.clone(),
                 &ExecuteMsg::Applyleave {
                     id: 3,
-                    start_date: String::from("3-8-2023"),
-                    end_date: String::from("5-8-2023"),
+                    from: String::from("3-8-2023"),
+                    to: String::from("2-9-2023"),
                     reason: String::from("Marriage"),
                 },
                 &[],

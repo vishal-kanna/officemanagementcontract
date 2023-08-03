@@ -16,8 +16,8 @@ pub enum ExecuteMsg {
     },
     Applyleave {
         id: u64,
-        start_date: String,
-        end_date: String,
+        from: String,
+        to: String,
         reason: String,
     },
     AcceptLeave{
