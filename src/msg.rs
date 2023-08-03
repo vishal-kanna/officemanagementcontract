@@ -14,6 +14,15 @@ pub enum ExecuteMsg {
         address: String,
         role: Role,
     },
+    Applyleave {
+        id: u64,
+        start_date: String,
+        end_date: String,
+        reason: String,
+    },
+    AcceptLeave{
+        leaveid:u128,
+    }
 }
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 
@@ -21,4 +30,5 @@ pub enum QueryMsg {
     GetEmployess {},
     GetEmployee { uid: u64 },
     GetSuperAdmin {},
+    ListLeaves {},
 }
