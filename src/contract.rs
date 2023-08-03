@@ -178,7 +178,7 @@ pub fn acceptleave(
         return Err(ContractError::NotSuperAdmin { });
     }
 }
-#[cfg_attr(not(feature = "library"), entry_point)]
+#[cfg_attr(not(feature = "query"), entry_point)]
 pub fn query(dep: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     use QueryMsg::*;
     match msg {
