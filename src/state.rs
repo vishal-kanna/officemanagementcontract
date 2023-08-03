@@ -8,7 +8,6 @@ pub struct User {
     pub username: String,
     pub age: u64,
     pub address: String,
-    pub role: Role,
 }
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default, JsonSchema)]
 pub enum Role {
@@ -26,6 +25,6 @@ pub struct UserDetails {
     pub address: String,
     pub role: Role,
 }
-pub const HR: Item<String> = Item::new("hr");
+pub const HR: Item<UserDetails> = Item::new("hr");
 pub const USERS: Map<u64, UserDetails> = Map::new("user");
 pub const ENTRY_SEQ: Item<u64> = Item::new("entry_seq");

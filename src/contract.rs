@@ -3,7 +3,7 @@ use std::ops::Add;
 use crate::error::ContractError;
 
 use crate::msg::{ExecuteMsg, InstatiateMsg, QueryMsg};
-use crate::state::{Role, UserDetails, USERS, ENTRY_SEQ, HR};
+use crate::state::{Role, UserDetails, ENTRY_SEQ, HR, USERS};
 use cosmwasm_std::{
     entry_point, to_binary, Binary, DepsMut, Empty, Env, MessageInfo, Order, Response, StdError,
 };
@@ -18,11 +18,22 @@ pub fn instantiate(
 ) -> Result<Response, StdError> {
     //here we are adding the HR/or Super user
     //validate should be done here
-    HR.save(deps.storage, &msg.hr.username)
-        .expect("Error in instantiating the admin");
     ENTRY_SEQ.save(deps.storage, &0u64)?;
-
-    Ok(Response::new().add_attribute("action", "HR instantiated"))
+    let uid = ENTRY_SEQ.update::<_, cosmwasm_std::StdError>(deps.storage, |uid| Ok(uid.add(1)))?;
+    let id = uid.clone();
+    let supad = UserDetails {
+        uid,
+        username: msg.hr.username,
+        age: msg.hr.age,
+        address: msg.hr.address,
+        role: Role::HR,
+    };
+    HR.save(deps.storage, &supad)
+        .expect("Error in instantiating the admin");
+    USERS.save(deps.storage, id, &supad).expect("Error while saving the super admin into the userdb");
+    Ok(Response::new()
+        .add_attribute("action", "HR instantiated")
+        .add_attribute("user id ", id.to_string()))
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]
@@ -55,12 +66,10 @@ pub fn addemploye(
     let id: u64;
     //check if the sender is HR
     let a = HR.load(dep.storage).expect("Super admin is not present");
-    println!("the info sender is {}",info.sender);
     //checking if the sender matches the instatiated super admin
-    if a == info.sender {
-        println!("the success case ");
-        let uid = ENTRY_SEQ
-            .update::<_, cosmwasm_std::StdError>(dep.storage, |uid| Ok(uid.add(1)))?;
+    if a.address == info.sender {
+        let uid =
+            ENTRY_SEQ.update::<_, cosmwasm_std::StdError>(dep.storage, |uid| Ok(uid.add(1)))?;
         id = uid.clone();
         let emp = UserDetails {
             uid,
@@ -69,17 +78,15 @@ pub fn addemploye(
             address,
             role,
         };
-
         USERS
-            .save(dep.storage, 1, &emp)
+            .save(dep.storage, id, &emp)
             .expect("Error while adding the employee");
     } else {
         return Err(ContractError::InstateError {});
     }
     Ok(Response::new()
         .add_attribute("Action", "employee added")
-        .add_attribute("userid ",id.to_string())
-       )
+        .add_attribute("userid ", id.to_string()))
 }
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn query(dep: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
@@ -90,7 +97,7 @@ pub fn query(dep: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
         GetSuperAdmin {} => to_binary(&admin(dep)?),
     }
 }
-pub fn admin(dep: Deps) -> StdResult<String> {
+pub fn admin(dep: Deps) -> StdResult<UserDetails> {
     let ad = HR.load(dep.storage)?;
     Ok(ad)
 }
@@ -126,10 +133,9 @@ mod tests {
         let code = ContractWrapper::new(execute, instantiate, query);
         let code_id = app.store_code(Box::new(code));
         let u = User {
-            username: String::from("abc"),
+            username: String::from("superadmin"),
             age: 25,
-            address: String::from("skjkfksk"),
-            role: Role::HR,
+            address: String::from("cosmosabc"),
         };
         let addr = app
             .instantiate_contract(
@@ -141,21 +147,46 @@ mod tests {
                 None,
             )
             .unwrap();
-            let a=addr.clone();
-        let queriedsuperadmin :String= app
+        let a = addr.clone();
+        let _queriedsuperadmin: UserDetails = app
             .wrap()
             .query_wasm_smart(addr, &QueryMsg::GetSuperAdmin {})
             .unwrap();
-        println!("the superadmin is {queriedsuperadmin}");
 
-        let ss=app.execute_contract(
-            Addr::unchecked("abc"), 
-            a.clone(), 
-            &ExecuteMsg::AddEmployee { name: String::from("Vishal"), age: 2, address: String::from("cosmos"), role: Role::Employee}, 
-            &[]).expect("Error executing the msg");
-        println!("the execute contract has been done {:?}",ss);
-        let res:Vec<UserDetails>=app.wrap().query_wasm_smart(a.clone(), &QueryMsg::GetEmployess {}).unwrap();
-        println!("the result of the query is {:#?}",res);
+        let _ss = app
+            .execute_contract(
+                Addr::unchecked("cosmosabc"),
+                a.clone(),
+                &ExecuteMsg::AddEmployee {
+                    name: String::from("Vishal"),
+                    age: 22,
+                    address: String::from("cosmos"),
+                    role: Role::Employee,
+                },
+                &[],
+            )
+            .expect("Error executing the msg");
+        let _ss = app
+            .execute_contract(
+                Addr::unchecked("cosmosabc"),
+                a.clone(),
+                &ExecuteMsg::AddEmployee {
+                    name: String::from("Hemanth"),
+                    age: 21,
+                    address: String::from("cosmosr"),
+                    role: Role::Employee,
+                },
+                &[],
+            )
+            .expect("Error executing the msg");
+
+        let r: Vec<UserDetails> = app
+            .wrap()
+            .query_wasm_smart(a.clone(), &QueryMsg::GetEmployess {})
+            .unwrap();
+        println!("All employees are {:#?}",r);
+
+        let singleemploye:UserDetails=app.wrap().query_wasm_smart(a.clone(), &QueryMsg::GetEmployee { uid: 1 }).unwrap();
+        println!("The single employee is {:#?}",singleemploye);
     }
-   
 }
