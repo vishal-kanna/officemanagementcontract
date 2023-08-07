@@ -15,4 +15,6 @@ pub enum ContractError {
     NotSuperAdmin{},
     #[error("From date should be smaller than To date")]
     WrongDates{},
+    #[error("You don't have sufficient leaves to apply")]
+    NoLeaves{},
 }

@@ -16,6 +16,7 @@ pub enum ExecuteMsg {
     },
     Applyleave {
         id: u64,
+        leavetypeid:u64,
         from: String,
         to: String,
         reason: String,

@@ -1,20 +1,14 @@
-// use std::intrinsics::type_name;
 use std::ops::Add;
-use chrono::{NaiveDate, NaiveDateTime};
-// use std::any::type_name;
-use std::any::type_name;
+use chrono::NaiveDate;
 
 use crate::error::ContractError;
 
 use crate::msg::{ExecuteMsg, InstatiateMsg, QueryMsg};
-use crate::state::{LeaveReq, Role, UserDetails, ENTRY_SEQ, HR, LEAVE_LIST, LEAVE_SEQ, USERS};
+use crate::state::{LeaveReq, Role, UserDetails, ENTRY_SEQ, HR, LEAVE_LIST, LEAVE_SEQ, USERS, UserDetails1, USERS_LEAVES, leavetype,LEAVE_TYPES,LEAVETYPE_SEQ, leavetype1};
 use cosmwasm_std::{
     entry_point, to_binary, Binary, DepsMut, Empty, Env, MessageInfo, Order, Response, StdError,
 };
 use cosmwasm_std::{Deps, StdResult};
-// fn type_of(_: &T) -> &'static str {
-//     std::any::type_name::()
-// }
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn instantiate(
     deps: DepsMut,
@@ -24,6 +18,7 @@ pub fn instantiate(
 ) -> Result<Response, StdError> {
     //here we are adding the HR/or Super user
     //validate should be done here
+    LEAVETYPE_SEQ.save(deps.storage, &0u64)?;
     ENTRY_SEQ.save(deps.storage, &0u64)?;
     LEAVE_SEQ.save(deps.storage, &0u128)?;
     let uid = ENTRY_SEQ.update::<_, cosmwasm_std::StdError>(deps.storage, |uid| Ok(uid.add(1)))?;
@@ -35,6 +30,21 @@ pub fn instantiate(
         address: msg.hr.address,
         role: Role::HR,
     };
+    let mut  leaves: Vec<leavetype>=Vec::new();
+    let cas=leavetype{
+        types:String::from("Casual Leave"),
+        count:10,
+    };
+    let sick=leavetype{
+        types:String::from("Sick Leave"),
+        count:12,
+    };
+    leaves.push(cas);
+    leaves.push(sick);
+    let length=leaves.len();
+    for i in 0 ..length{
+        LEAVE_TYPES.save(deps.storage, (i+1) as u64, &leaves[i]).expect("Error while adding the leaves to Leave types ");
+    }
     HR.save(deps.storage, &supad)
         .expect("Error in instantiating the admin");
     USERS
@@ -62,10 +72,11 @@ pub fn execute(
         } => addemploye(dep, env, info, name, age, address, role),
         ExecuteMsg::Applyleave {
             id,
+            leavetypeid,
             from,
             to,
             reason,
-        } => apply_leave(dep, env, info, id, from, to, reason),
+        } => apply_leave(dep, env, info, id,leavetypeid ,from, to, reason),
         ExecuteMsg::AcceptLeave { leaveid }=>acceptleave(dep, info, leaveid),
     }
 }
@@ -89,15 +100,35 @@ pub fn addemploye(
         id = uid.clone();
         let emp = UserDetails {
             uid,
-            username: name,
+            username: name.clone(),
             age,
-            address,
-            role,
+            address:address.clone(),
+            role:role.clone(),
         };
+        let mut  leav: Vec<leavetype1>=Vec::new();
+        for k in LEAVE_TYPES.range(dep.storage, None, None, Order::Ascending){
+            let a=k.unwrap();
+            let b=leavetype1{
+                id:a.0,
+                types:a.1.types,
+                count:a.1.count,
+            };
+            leav.push(b);
+        }
+        let fulldetails=UserDetails1{
+            uid:uid.clone(),
+            username:name.clone(),
+            age:age.clone(),
+            address:address.clone(),
+            role:role.clone(),
+            leaves:leav,
+        };
+        USERS_LEAVES.save(dep.storage, uid, &fulldetails).expect("Error while adding the leaves in full details");
         USERS
             .save(dep.storage, id, &emp)
             .expect("Error while adding the employee");
     } else {
+        // println!("IM here toooooo!!!!!!!");
         return Err(ContractError::InstateError {});
     }
     Ok(Response::new()
@@ -110,29 +141,31 @@ pub fn apply_leave(
     _env: Env,
     info: MessageInfo,
     id: u64,
+    leavetypeid:u64,
     from: String,
     to: String,
     reason: String,
 ) -> Result<Response, ContractError> {
     //check if the student present or not
     //if present ,he may apply leave or else he shouldnot
-    let res = USERS.load(dep.storage, id.clone());
+    let res = USERS_LEAVES.load(dep.storage, id.clone());
     let leave: u128;
     match res {
         Ok(student_present) => {
             if info.sender == student_present.address {
-                let leaveid = LEAVE_SEQ
+               let leaveid = LEAVE_SEQ
                     .update::<_, cosmwasm_std::StdError>(dep.storage, |leaveid: u128| {
                         Ok(leaveid.add(1))
-                    })?;
-            let s_date = NaiveDate::parse_from_str(&from.clone(), "%d-%m-%Y").unwrap();
-                // println!("the naive date is {:?}",s_date);
+                    })?; 
+            let s_date: NaiveDate = NaiveDate::parse_from_str(&from.clone(), "%d-%m-%Y").unwrap();
                 let e_date = NaiveDate::parse_from_str(&to.clone(), "%d-%m-%Y").unwrap();
-                    // println!("the end date is {}",type_name::<typeof(my_variable)>());
+                // let diff=e_date-s_date;
+                // let nooffays=diff.num_days();
                 if s_date<e_date{
                     leave = leaveid.clone();
                     let leavereq = LeaveReq {
                         id: id.clone(),
+                        leavetypeid,
                         from: from.to_string(),
                         to: to.to_string(),
                         status: "Pending".to_string(),
@@ -181,9 +214,44 @@ pub fn acceptleave(
     let adminsaddress = HR.load(deps.storage)?.address;
     let mut flag=false;
         if adminsaddress == info.sender {
-            let mut leave = LEAVE_LIST.load(deps.storage, leaveid)?;
+            let mut leave: LeaveReq = LEAVE_LIST.load(deps.storage, leaveid)?;
+            let s_date: NaiveDate = NaiveDate::parse_from_str(&leave.from.clone(), "%d-%m-%Y").unwrap();
+            let e_date = NaiveDate::parse_from_str(&leave.to.clone(), "%d-%m-%Y").unwrap();
+            let diff=e_date-s_date;
+            let nooffays =diff.num_days();
+            let userid=leave.id;
+            let userspecified=USERS_LEAVES.load(deps.storage, userid)?;
+            let u=userspecified.clone();
+            let all_leaves=userspecified.leaves;
+            let leavetypeid=leave.leavetypeid;
+            let mut updatedleaves :Vec<leavetype1>=Vec::new();
+
+            for leaves in all_leaves{
+                // updatedleaves.push(leaves);
+                if leaves.id.eq(&leavetypeid){
+                    if leaves.count>=nooffays as u64{
+                    let a=leaves.count-nooffays as u64;
+
+                        let updatedleavetype=leavetype1{
+                            id:leaves.id,
+                            types:leaves.types,
+                            count:a
+                        };
+                        updatedleaves.push(updatedleavetype);
+                    }else{
+                        return  Err(ContractError::NoLeaves {});
+                    }
+                }else{
+                    updatedleaves.push(leaves);
+                }
+            }
+            let updateduser=UserDetails1{
+                leaves:updatedleaves,
+                ..u
+            };
+            USERS_LEAVES.save(deps.storage, userid,&updateduser).expect("Error occured while adding the updated leave of the user");
             leave.status = "approved".to_string();
-            let updated_leave = leave.clone();
+            let updated_leave: LeaveReq = leave.clone();
             println!("the updated leave req is {:?}", updated_leave);
             LEAVE_LIST.save(deps.storage, leaveid, &updated_leave)?;
             flag=true;
@@ -198,7 +266,7 @@ pub fn acceptleave(
 pub fn query(dep: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     use QueryMsg::*;
     match msg {
-        GetEmployess {} => to_binary(&getemployees(dep)),
+        GetEmployess {} => to_binary(&getemployees1(dep)),
         GetEmployee { uid } => to_binary(&getemployee(dep, uid)?),
         GetSuperAdmin {} => to_binary(&admin(dep)?),
         ListLeaves {} => to_binary(&listallleaves(dep)),
@@ -211,6 +279,18 @@ pub fn admin(dep: Deps) -> StdResult<UserDetails> {
 pub fn getemployees(dep: Deps) -> Vec<UserDetails> {
     let mut re: Vec<UserDetails> = Vec::new();
     for result in USERS.range(dep.storage, None, None, Order::Ascending) {
+        match result {
+            Ok(res) => {
+                re.push(res.1);
+            }
+            Err(_res) => {}
+        }
+    }
+    re
+}
+pub fn getemployees1(dep: Deps) -> Vec<UserDetails1> {
+    let mut re: Vec<UserDetails1> = Vec::new();
+    for result in USERS_LEAVES.range(dep.storage, None, None, Order::Ascending) {
         match result {
             Ok(res) => {
                 re.push(res.1);
@@ -272,7 +352,7 @@ mod tests {
                 },
                 &[],
             )
-            .expect("Error executing the msg");
+            .expect("Error executing addemploee function");
         let _ss = app
             .execute_contract(
                 Addr::unchecked("cosmosabc"),
@@ -285,9 +365,9 @@ mod tests {
                 },
                 &[],
             )
-            .expect("Error executing the msg");
+            .expect("Error executing addemploee function");
 
-        let r: Vec<UserDetails> = app
+        let r: Vec<UserDetails1> = app
             .wrap()
             .query_wasm_smart(a.clone(), &QueryMsg::GetEmployess {})
             .unwrap();
@@ -299,42 +379,38 @@ mod tests {
             .unwrap();
         println!("The single employee is {:#?}", singleemploye);
 
-        let _ss = app
+        let ss = app
             .execute_contract(
                 Addr::unchecked("cosmosr"),
                 a.clone(),
                 &ExecuteMsg::Applyleave {
                     id: 3,
+                    leavetypeid:1,
                     from: String::from("3-8-2023"),
-                    to: String::from("2-9-2023"),
+                    to: String::from("6-8-2023"),
                     reason: String::from("Marriage"),
                 },
                 &[],
             )
             .expect("Error while applying the leave");
+        println!("the events after the applying leaves are {:#?}",ss);
         let listleaves: Vec<LeaveReq> = app
             .wrap()
             .query_wasm_smart(a.clone(), &QueryMsg::ListLeaves {})
             .expect("error quering the leaves");
         println!("The leaves are {:#?}", listleaves);
-        let accept=app.execute_contract(Addr::unchecked("cosmosabc"), a.clone(),&ExecuteMsg::AcceptLeave { leaveid: 1 }, &[]).expect("Error while accepting the leave");
-        let listleaves: Vec<LeaveReq> = app
+        let _accept=app.execute_contract(Addr::unchecked("cosmosabc"), a.clone(),&ExecuteMsg::AcceptLeave { leaveid: 1 }, &[]).expect("Error while accepting the leave");
+        let _listleaves: Vec<LeaveReq> = app
             .wrap()
             .query_wasm_smart(a.clone(), &QueryMsg::ListLeaves {})
             .expect("error quering the leaves");
+
+
+            let singleemploye: Vec<UserDetails1> = app
+            .wrap()
+            .query_wasm_smart(a.clone(), &QueryMsg::GetEmployess {})
+            .unwrap();
+        println!("The single employee is {:#?}", singleemploye);
     }
 }
-/*  let _ss = app
-.execute_contract(
-    Addr::unchecked("cosmosabc"),
-    a.clone(),
-    &ExecuteMsg::Applyleave{
-        id: 3,
-        start_date: String::from("3-8-2023"),
-        end_date: String::from("5-8-2023"),
-        reason: String::from("Marriage")
-    },
-    &[],
-)
-.expect("Error while applying the leave");
-     */
+
