@@ -1,4 +1,4 @@
-use crate::state::{Role, User};
+use crate::state::{Leavetype, Role, User};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
@@ -16,14 +16,17 @@ pub enum ExecuteMsg {
     },
     Applyleave {
         id: u64,
-        leavetypeid:u64,
+        leavetypeid: u64,
         from: String,
         to: String,
         reason: String,
     },
-    AcceptLeave{
-        leaveid:u128,
-    }
+    AcceptLeave {
+        leaveid: u128,
+    },
+    AddLeaveType {
+        newleave: Leavetype,
+    },
 }
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 

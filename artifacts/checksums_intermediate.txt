@@ -1,1 +1,1 @@
-a032fa0730fa21cd41e88fd960d73ceb9b8302882edb5afcb8d186c96041cb4c  ./target/wasm32-unknown-unknown/release/officemanagement.wasm
+2f0c2b9ebc79c5787bfb1b0dfcb6567067191f190ac8a69e13d4d4de7b389acf  ./target/wasm32-unknown-unknown/release/officemanagement.wasm

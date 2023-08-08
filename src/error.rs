@@ -12,9 +12,9 @@ pub enum ContractError {
     #[error("Sender needs to be the one who applied leave")]
     SenderNotMatched {},
     #[error("Sender is the the super admin")]
-    NotSuperAdmin{},
+    NotSuperAdmin {},
     #[error("From date should be smaller than To date")]
-    WrongDates{},
+    WrongDates {},
     #[error("You don't have sufficient leaves to apply")]
-    NoLeaves{},
+    NoLeaves {},
 }
